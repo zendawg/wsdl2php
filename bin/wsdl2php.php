@@ -118,7 +118,7 @@ foreach($operations as $operation) {
   }*/
 
   $matches = array();
-  if(preg_match('/^(\w[\w\d_]*) (\w[\w\d_]*)\(([\w\$\d,_ ]*)\)$/', $operation, $matches)) {
+  if(preg_match('/^(\w[\w\d_\.]*) (\w[\w\d_]*)\(([\w\$\d,_\. ]*)\)$/', $operation, $matches)) {
     $returns = $matches[1];
     $call = $matches[2];
     $params = $matches[3];
@@ -127,7 +127,7 @@ foreach($operations as $operation) {
     $call = $matches[2];
     $params = $matches[3];
   } else { // invalid function call
-    throw new Exception('Invalid function call: '.$function);
+    throw new Exception('Invalid function call: '.$operation);
   }
 
   $params = explode(', ', $params);
@@ -175,6 +175,14 @@ $types = $client->__getTypes();
 $primitive_types = array('string', 'int', 'long', 'float', 'boolean', 'dateTime', 'double', 'short', 'UNKNOWN', 'base64Binary', 'decimal', 'ArrayOfInt', 'ArrayOfFloat', 'ArrayOfString', 'decimal', 'hexBinary'); // TODO: dateTime is special, maybe use PEAR::Date or similar
 $service['types'] = array();
 foreach($types as $type) {
+
+if (preg_match("/\.\d/", $member)) {
+	//$member = preg_replace("\.\d", "_\d", $member);
+//	$member = str_replace(".", "_", $member);
+	$type = str_replace(".", "_", $type);
+//	$class = str_replace(".", "_", $class);
+//echo "member is " . $member .PHP_EOL;
+}
   $parts = explode("\n", $type);
   $class = explode(" ", $parts[0]);
   $class = $class[1];
@@ -192,13 +200,12 @@ foreach($types as $type) {
   for($i=1; $i<count($parts)-1; $i++) {
     $parts[$i] = trim($parts[$i]);
     list($type, $member) = explode(" ", substr($parts[$i], 0, strlen($parts[$i])-1) );
-
     // check syntax
+
     if(preg_match('/^$\w[\w\d_]*$/', $member)) {
       throw new Exception('illegal syntax for member variable: '.$member);
       continue;
     }
-
     // IMPORTANT: Need to filter out namespace on member if presented
     if(strpos($member, ':')) { // keep the last part
       list($tmp, $member) = explode(':', $member);
@@ -241,15 +248,39 @@ foreach($service['types'] as $type) {
   //  $code .= " */\n";
 
   // add enumeration values
-  $code .= "class ".$type['class']." {\n";
+//if (preg_match("/\.\d/", $type['class'])) {
+//	$name = preg_replace("/\.(\d)/", "_$1", $type['class']);
+//	$member = str_replace(".", "_", $member);
+	$name = str_replace(".", "_", $type['class']);
+//	$class = str_replace(".", "_", $class);
+echo "name is " . $name .PHP_EOL;
+//} else {
+//	$name = $type['class'];
+//}
+
+  $code .= "class ".$name." {\n";
   foreach($type['values'] as $value) {
     $code .= "  const ".generatePHPSymbol($value)." = '$value';\n";
   }
   
   // add member variables
   foreach($type['members'] as $member) {
+//if (preg_match("/\.\d/", $member['member'])) {
+	//$member = preg_replace("\.\d", "_\d", $member);
+//	$member = str_replace(".", "_", $member);
+	$member['member'] = str_replace(".", "_", $member['member']);
+	$member['type'] = str_replace(".", "_", $member['type']);
+//	$class = str_replace(".", "_", $class);
+echo "member is " . $member['member'] . ", type is " . $member['type'] . PHP_EOL;
+//}
     //$code .= "  /* ".$member['type']." */\n";
-    $code .= "  public \$".$member['member']."; // ".$member['type']."\n";
+    //echo "  public \$".$member['member']."; // ".$member['type']."\n";
+if (strrpos($member['member'], "Array") == strlen($member['member']) - strlen("Array")) {
+	$code .= "  /** array() of ".$member['type']." */\n";
+} else {
+	$code .= "  /** ".$member['type']." */\n";
+}
+    $code .= "  public \$".$member['member'].";\n";
   }
   $code .= "}\n\n";
 
@@ -298,6 +329,15 @@ $code .= "class ".$service['class']." extends SoapClient {\n\n";
 // add classmap
 $code .= "  private static \$classmap = array(\n";
 foreach($service['types'] as $type) {
+//if (preg_match("/\.\d/", $type['class'])) {
+	//$member = preg_replace("\.\d", "_\d", $member);
+//	$member = str_replace(".", "_", $member);
+//	$type['class'] = preg_replace("/\.(\d)/", "_$1",  $type['class']);
+	$type['class'] = str_replace(".", "_", $type['class']);
+	//$member['type'] = str_replace(".", "_", $member['type']);
+//	$class = str_replace(".", "_", $class);
+echo "name is " . $type['class'] .PHP_EOL;
+//}
   $code .= "                                    '".$type['class']."' => '".$type['class']."',\n";
 }
 $code .= "                                   );\n\n";
@@ -418,6 +458,7 @@ function checkForEnum(&$dom, $class) {
  */
 function findType(&$dom, $class) {
   $types_node  = $dom->getElementsByTagName('types')->item(0);
+if ($types_node) {
   $schema_list = $types_node->getElementsByTagName('schema');
   
   for ($i=0; $i<$schema_list->length; $i++) {
@@ -431,6 +472,7 @@ function findType(&$dom, $class) {
       }
     }
   }
+}
   return null;
 }
 
